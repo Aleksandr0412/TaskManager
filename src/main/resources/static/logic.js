@@ -69,6 +69,8 @@ logService.getData($scope);
 
 app.controller('loginController', function ($scope, $location, $window, $http) {
 
+
+
     $scope.exit=function(){
         localStorage.clear();//setItem("token", '');
         $window.location.href = contextPath;
@@ -80,12 +82,18 @@ app.controller('loginController', function ($scope, $location, $window, $http) {
             if(response.data.status !== 200)
                 $scope.result = "Неправильный логин и/или пароль";
             else {
+
+
+
                 localStorage.setItem("token", response.data.token);
                 localStorage.setItem("user", $scope.authUser.login);
+                getStatus(); getPriority();
+
                 $window.location.href = contextPath + '#!/projects';
                 }
             });
     }
+
 });
 
 app.controller('registerController', function ($scope, $location, $window, $http) {
@@ -272,6 +280,25 @@ app.controller('projectInfoController', function ($scope, $location, $window, $h
 
 app.controller('tasksController', function ($scope, $location, $window, $http) {
 
+                    $http.get(contextPath + '/api/v1/storage/status',
+                       {
+                         headers: {'Authorization': 'Bearer '+localStorage.getItem("token")}
+                       })
+                        .then(function (response) {
+                            localStorage.setItem("status", angular.toJson(response.data));
+                        });
+
+
+
+                    $http.get(contextPath + '/api/v1/storage/priority',
+                       {
+                         headers: {'Authorization': 'Bearer '+localStorage.getItem("token")}
+                       })
+                        .then(function (response) {
+                            localStorage.setItem("priority", angular.toJson(response.data));
+                        });
+
+
     $scope.select=function(taskId){
         localStorage.setItem("taskId", taskId);
         $window.location.href = contextPath + '#!/task_info';
@@ -282,14 +309,36 @@ app.controller('tasksController', function ($scope, $location, $window, $http) {
         $window.location.href = contextPath + '#!/task';
     }
 
-    fillTable = function () {
-        $http.get(contextPath + '/api/v1/tasks',
-           {
-             headers: {'Authorization': 'Bearer '+localStorage.getItem("token")}
-           })
-            .then(function (response) {
-                $scope.TaskList = response.data;
-            });
+    $scope.query = function(task_page) {
+        if(task_page < 1) return;
+        fillTable(task_page);
+    }
+
+     $scope.update = function() {
+        fillTable(1);
+     }
+
+    fillTable = function (task_page) {
+        if(task_page == null) task_page = 1;
+        var url = contextPath + '/api/v1/tasks'
+        alert($scope.isArchived)
+        url = url +'?page=' + task_page;
+        if($scope.isArchived)
+            url = url +'&is_archived=true';
+        else
+            url = url +'&is_archived=false';
+        $http.get(url,
+                   {
+                     headers: {'Authorization': 'Bearer '+localStorage.getItem("token")}
+                   })
+                    .then(function (response) {
+                        if(angular.equals([], response.data)) {
+                            task_page = task_page-1;
+                            return;
+                        }
+                        $scope.TaskList = response.data;
+                        $scope.page = task_page;
+                    });
     };
     fillTable();
 });
@@ -304,6 +353,9 @@ app.controller('taskInfoController', function ($scope, $location, $window, $http
         $window.location.href = contextPath + '#!/task';
     };
 
+    $scope.subscribe = function() {
+
+    }
    /* var fileSaver = angular
       .module('fileSaver', ['ngFileSaver'])
 
@@ -353,10 +405,15 @@ $http.get(contextPath + '/api/v1/files',
 
 });
 
+var isArchived;
+var projectTask;
 app.controller('taskController', function ($scope, $location, $window, $http) {
 
     var taskId = localStorage.getItem("taskId");
     var is_edit_task = localStorage.getItem("is_edit_task");
+
+    $scope.priorityList = angular.fromJson(localStorage.getItem("priority"))
+    $scope.statusList = angular.fromJson(localStorage.getItem("status"))
 
      /*<tr><td>Id:</td><td>{{id}}</td></tr>
         <tr><td>Title:</td><td>{{title}}</td></tr>
@@ -380,20 +437,29 @@ app.controller('taskController', function ($scope, $location, $window, $http) {
         });
     };
 
+    $scope.select = function(p) {
+        projectTask = p;
+    };
+
     $scope.save=function() {
         if(is_edit_task == 0) {
+        console.log($scope.project);
+        config = fill_config();
+        fill_task(config, $scope);
+        config.project = projectTask;
             $http.post(contextPath + '/api/v1/tasks',
-                       $scope.project, {
+                       config, {
                            headers: {'Authorization': 'Bearer '+localStorage.getItem("token")}
                        })
                 .then(function (response) {
-                    console.log(response.data);
-                    /*if(response.data.status !== 200)
-                         $scope.result = response.data.messages[0];
+                    var y = response.data;
+                    if(response.status !== 201)
+                         alert(response.data.message);
                     else {
-                          localStorage.setItem("token", response.data.token);
-                          $window.location.href = contextPath + '#!/projects';
-                     }*/
+                         alert(response.data.message);
+
+                         $window.location.href = contextPath + '#!/tasks';
+                    }
                 });
         } else {
             var config_task = angular.fromJson(localStorage.getItem("edit_task"));
@@ -435,6 +501,24 @@ fill_task = function (rec, don) {
     rec.status = don.status;
     rec.project = don.project;
 };
+
+fill_config = function() {
+    return {
+            'id': null,
+            'title': null,
+            'leaderId': null,
+            'description': null,
+            'project': null,
+            'priority': null,
+            'status': null,
+            'deadLine': null,
+            'users': null,
+            'comments': null,
+            'createdAt': null,
+            'updatedAt': null,
+            'isArchived': false
+    }
+}
 
 uploadFiles = function (files, taskId) {
 
